@@ -21,13 +21,15 @@ boards_metas = {
     "olimex_e407" :  "colcon.meta",
     "due" : "colcon_verylowmem.meta",
     "zero" : "colcon_verylowmem.meta",
-    "pico": "colcon.meta"
-
+    "pico": "colcon.meta",
+    "m5stack-coreS3": "colcon.meta",
+    "m5stack-atomS3": "colcon.meta"
 }
 
 project_options = env.GetProjectConfig().items(env=env["PIOENV"], as_dict=True)
 main_path = os.path.realpath(".")
 global_env = DefaultEnvironment()
+platform = env['PIOPLATFORM']
 board = env['BOARD']
 framework = env['PIOFRAMEWORK'][0]
 extra_packages_path = "{}/extra_packages".format(env['PROJECT_DIR'])
@@ -39,6 +41,9 @@ microros_distro = global_env.BoardConfig().get("microros_distro", "kilted")
 
 # Retrieve the required transport. Default serial
 microros_transport = global_env.BoardConfig().get("microros_transport", "serial")
+
+# Retrieve the required RMW implementation. Default rmw_microxrcedds
+microros_rmw_impl = global_env.BoardConfig().get("microros_rmw_impl", "rmw_microxrcedds")
 
 # Retrieve the user meta. Default none
 microros_user_meta = "{}/{}".format(env['PROJECT_DIR'], global_env.BoardConfig().get("microros_user_meta", ""))
@@ -77,6 +82,28 @@ if "clean_libmicroros" not in global_env.get("__PIO_TARGETS", {}):
    global_env.AddCustomTarget("clean_libmicroros", None, clean_libmicroros_callback, title="Clean libmicroros", description="Clean libmicroros")
 
 
+def get_mcu_system():
+    if framework == "zephyr":
+        mcu_system = "ZEPHYR"
+
+    elif framework == "espidf":
+        mcu_system = "ESPIDF"
+
+    elif framework == "mbed":
+        mcu_system = "MBED"
+
+    elif (framework == "arduino") and (platform == "espressif32"):
+        mcu_system = "ARDUINO_ESP32"
+
+    elif (framework == "arduino") and (platform == "ststm32") and (board == "opencr"):
+        mcu_system = "ARDUINO_OPENCR"
+    
+    else:
+        mcu_system = "LINUX"
+
+    return mcu_system
+
+
 def build_microros(*args, **kwargs):
     ##############################
     #### Install dependencies ####
@@ -99,17 +126,29 @@ def build_microros(*args, **kwargs):
 
     print("Configuring {} with transport {}".format(board, microros_transport))
 
+    _cpppath = env['CPPPATH'][:]
+
     cmake_toolchain = library_builder.CMakeToolchain(
         main_path + "/platformio_toolchain.cmake",
         env['CC'],
         env['CXX'],
         env['AR'],
         "{} {} -DCLOCK_MONOTONIC=0 -D'__attribute__(x)='".format(' '.join(env['CFLAGS']), ' '.join(env['CCFLAGS'])),
-        "{} {} -fno-rtti -DCLOCK_MONOTONIC=0 -D'__attribute__(x)='".format(' '.join(env['CXXFLAGS']), ' '.join(env['CCFLAGS']))
+        "{} {} -fno-rtti -DCLOCK_MONOTONIC=0 -D'__attribute__(x)='".format(' '.join(env['CXXFLAGS']), ' '.join(env['CCFLAGS'])),
+        "{}".format(' '.join(_cpppath))
     )
 
+    mcu_system_option = get_mcu_system()
+
     python_env_path = env['PROJECT_CORE_DIR'] + "/penv/bin/activate"
-    builder = library_builder.Build(library_folder=main_path, packages_folder=extra_packages_path, distro=microros_distro, python_env=python_env_path)
+    builder = library_builder.Build(
+        library_folder=main_path, 
+        packages_folder=extra_packages_path, 
+        distro=microros_distro, 
+        python_env=python_env_path, 
+        microros_rmw_impl=microros_rmw_impl,
+        mcu_system=mcu_system_option,
+        rmw_transport=microros_transport )
     builder.run('{}/metas/{}'.format(main_path, selected_board_meta), cmake_toolchain.path, microros_user_meta)
 
     #######################################################
@@ -140,11 +179,13 @@ def update_env():
     # Add platformio library general include path
     global_env.Append(CPPPATH=[
         main_path + "/platform_code",
+        main_path + "/platform_code/{}/common".format(framework),
         main_path + "/platform_code/{}/{}".format(framework, microros_transport)])
 
     # Add platformio library general to library include path
     env.Append(CPPPATH=[
         main_path + "/platform_code",
+        main_path + "/platform_code/{}/common".format(framework),
         main_path + "/platform_code/{}/{}".format(framework, microros_transport)])
 
     if (board == "teensy31" or board == "teensy35" or board == "teensy36"):
@@ -161,8 +202,11 @@ def update_env():
     env['SRC_FILTER'] += ' +<platform_code/{}/clock_gettime.cpp>'.format(framework)
 
     # Add transport sources according to the framework and the transport
-    env['SRC_FILTER'] += ' +<platform_code/{}/{}/micro_ros_transport.cpp>'.format(framework, microros_transport)
-
+    if microros_rmw_impl == "rmw_zenoh_pico":
+      env['SRC_FILTER'] += ' +<platform_code/{}/common/rmw_zenoh_common.cpp>'.format(framework)
+      env['SRC_FILTER'] += ' +<platform_code/{}/{}/rmw_zenoh_transport.cpp>'.format(framework, microros_transport)
+    else:
+      env['SRC_FILTER'] += ' +<platform_code/{}/{}/micro_ros_transport.cpp>'.format(framework, microros_transport)
 
 from SCons.Script import COMMAND_LINE_TARGETS
 

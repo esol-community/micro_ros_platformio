@@ -1,0 +1,199 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 33740dfa..02116d83 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,7 +15,7 @@ cmake_minimum_required(VERSION 3.13)
+ 
+ file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version.txt version)
+ 
+-project(zenohpico VERSION ${version} LANGUAGES C)
++project(zenohpico VERSION ${version} LANGUAGES C CXX)
+ 
+ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
+ include(helpers)
+@@ -47,16 +47,21 @@ option(WITH_ZEPHYR "Build for Zephyr RTOS" OFF)
+ option(WITH_FREERTOS_PLUS_TCP "Build for FreeRTOS RTOS and FreeRTOS-Plus-TCP network stack" OFF)
+ option(WITH_FREERTOS_LWIP "Build for FreeRTOS RTOS and LWIP (Lightweight IP) network stack" OFF)
+ option(WITH_RPI_PICO "Build for Raspberry Pi Pico" OFF)
++option(WITH_ARDUINO_ESP32 "Build for ESP32 on Arduino" OFF)
++option(WITH_ARDUINO_OPENCR "Build for OPENCR on Arduino" OFF)
++option(WITH_ESPIDF "Build for ESP32 on espidf" OFF)
++option(WITH_MBED "Build for mbed" OFF)
++
+ set(ZENOH_LOG "" CACHE STRING "Use this to set the ZENOH_LOG variable")
+ set(ZENOH_LOG_PRINT "" CACHE STRING "Use this to set the ZENOH_LOG_PRINT variable")
+ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
+ if(CMAKE_EXPORT_COMPILE_COMMANDS)
+-  set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES 
++  set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES
+       ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+ endif()
+ 
+ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+-  if (BUILD_SHARED_LIBS) 
++  if (BUILD_SHARED_LIBS)
+     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+   endif()
+ elseif(CMAKE_SYSTEM_NAME MATCHES "Generic")
+@@ -159,7 +164,7 @@ endfunction()
+ 
+ pico_add_compile_definition(ZENOH_C_STANDARD=${CMAKE_C_STANDARD})
+ 
+-if (NOT CMAKE_BUILD_TYPE MATCHES "RELEASE" OR "Release") 
++if (NOT CMAKE_BUILD_TYPE MATCHES "RELEASE" OR "Release")
+   # while in development, use timestamp for patch version:
+   string(TIMESTAMP PROJECT_VERSION_PATCH "%Y%m%ddev")
+   set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+@@ -190,6 +195,15 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Generic")
+     pico_add_compile_definition(ZENOH_FREERTOS_PLUS_TCP)
+   elseif(WITH_FREERTOS_LWIP)
+     pico_add_compile_definition(ZENOH_FREERTOS_LWIP)
++  elseif(WITH_ARDUINO_ESP32)
++    pico_add_compile_definition(ZENOH_ARDUINO_ESP32)
++  elseif(WITH_ARDUINO_OPENCR)
++    pico_add_compile_definition(ZENOH_ARDUINO_OPENCR)
++    pico_add_compile_definition(Z_FEATURE_MULTI_THREAD=0)
++  elseif(WITH_ESPIDF)
++    pico_add_compile_definition(ZENOH_ESPIDF)
++  elseif(WITH_MBED)
++    pico_add_compile_definition(ZENOH_MBED)
+   endif()
+ elseif(CMAKE_SYSTEM_NAME MATCHES "PICO") # Raspberry Pi Pico Series
+   pico_add_compile_definition(ZENOH_RPI_PICO)
+@@ -200,7 +214,7 @@ else()
+ endif()
+ 
+ # Compiler definition
+-message("Compilers in use: ${CMAKE_C_COMPILER_ID}, ${CMAKE_CXX_COMPILER_ID}")
++message(STATUS "Compilers in use: ${CMAKE_C_COMPILER_ID}, ${CMAKE_CXX_COMPILER_ID}")
+ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
+   pico_add_compile_definition(ZENOH_COMPILER_CLANG)
+ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
+@@ -233,8 +247,8 @@ endif()
+ add_compile_definitions("Z_BUILD_LOG=$<CONFIG:Debug>")
+ 
+ # Zenoh pico feature configuration options
+-set(FRAG_MAX_SIZE 4096 CACHE STRING "Use this to override the maximum size for fragmented messages")
+-set(BATCH_UNICAST_SIZE 2048 CACHE STRING "Use this to override the maximum unicast batch size")
++set(FRAG_MAX_SIZE 2048 CACHE STRING "Use this to override the maximum size for fragmented messages")
++set(BATCH_UNICAST_SIZE 1024 CACHE STRING "Use this to override the maximum unicast batch size")
+ set(BATCH_MULTICAST_SIZE 2048 CACHE STRING "Use this to override the maximum multicast batch size")
+ set(Z_CONFIG_SOCKET_TIMEOUT 100 CACHE STRING "Default socket timeout in milliseconds")
+ set(Z_TRANSPORT_LEASE 10000 CACHE STRING "Link lease duration in milliseconds to announce to other zenoh nodes")
+@@ -245,7 +259,7 @@ set(Z_FEATURE_SUBSCRIPTION 1 CACHE STRING "Toggle subscription feature")
+ set(Z_FEATURE_QUERY 1 CACHE STRING "Toggle query feature")
+ set(Z_FEATURE_QUERYABLE 1 CACHE STRING "Toggle queryable feature")
+ set(Z_FEATURE_LIVELINESS 1 CACHE STRING "Toggle liveliness feature")
+-set(Z_FEATURE_INTEREST 1 CACHE STRING "Toggle interests")
++set(Z_FEATURE_INTEREST 0 CACHE STRING "Toggle interests")
+ set(Z_FEATURE_FRAGMENTATION 1 CACHE STRING "Toggle fragmentation")
+ set(Z_FEATURE_ENCODING_VALUES 1 CACHE STRING "Toggle encoding values")
+ set(Z_FEATURE_MULTI_THREAD 1 CACHE STRING "Toggle multithread")
+@@ -369,6 +383,22 @@ if(PICO_SHARED)
+       $<INSTALL_INTERFACE:include>)
+ endif()
+ 
++# Platformio definition
++if (PLATFORMIO_CPPPATH)
++  if(PICO_STATIC)
++    target_include_directories(${Libname}_static
++      PRIVATE
++      ${PLATFORMIO_CPPPATH}
++    )
++  endif()
++
++  if(PICO_SHARED)
++    target_include_directories(${Libname}_shared
++      PRIVATE
++      ${PLATFORMIO_CPPPATH}
++    )
++  endif()
++endif()
+ 
+ file(GLOB_RECURSE Sources
+   "src/api/*.c"
+@@ -405,6 +435,18 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
+ elseif(CMAKE_SYSTEM_NAME MATCHES "Windows")
+   file (GLOB Sources_Windows "src/system/windows/*.c")
+   list(APPEND Sources ${Sources_Windows})
++elseif(WITH_ARDUINO_ESP32)
++  file (GLOB Sources_arduino_esp32 "src/system/arduino/esp32/*")
++  list(APPEND Sources ${Sources_arduino_esp32})
++elseif(WITH_ARDUINO_OPENCR)
++  file (GLOB Sources_arduino_opencr "src/system/arduino/opencr/*")
++  list(APPEND Sources ${Sources_arduino_opencr})
++elseif(WITH_ESPIDF)
++  file (GLOB Sources_espidf "src/zenohpico/src/system/espidf/*")
++  list(APPEND Sources ${Sources_espidf})
++elseif(WITH_MBED)
++  file (GLOB Sources_mbed "src/zenohpico/src/system/espidf/*")
++  list(APPEND Sources ${Sources_mbed})
+ endif()
+ 
+ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
+diff --git a/colcon.pkg b/colcon.pkg
+old mode 100644
+new mode 100755
+index 51ae41f2..1bc1da64
+--- a/colcon.pkg
++++ b/colcon.pkg
+@@ -3,6 +3,6 @@
+     "type": "cmake",
+     "cmake-args":[
+         "-DTESTS=OFF",
+-        "-DEXAMPLES=OFF",
+-    ],
++        "-DEXAMPLES=OFF"
++    ]
+ }
+diff --git a/src/system/arduino/esp32/network.cpp b/src/system/arduino/esp32/network.cpp
+old mode 100644
+new mode 100755
+index 7ab7fa9a..9fc42148
+--- a/src/system/arduino/esp32/network.cpp
++++ b/src/system/arduino/esp32/network.cpp
+@@ -11,8 +11,9 @@
+ // Contributors:
+ //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
+ //
+-
++#if Z_FEATURE_LINK_BLUETOOTH == 1
+ #include <BluetoothSerial.h>
++#endif /* Z_FEATURE_LINK_BLUETOOTH */
+ #include <HardwareSerial.h>
+ 
+ extern "C" {
+diff --git a/src/system/arduino/esp32/system.c b/src/system/arduino/esp32/system.c
+index 1c80f4b3..3e46d100 100644
+--- a/src/system/arduino/esp32/system.c
++++ b/src/system/arduino/esp32/system.c
+@@ -125,7 +125,19 @@ z_result_t _z_task_join(_z_task_t *task) {
+ 
+ z_result_t _z_task_detach(_z_task_t *task) {
+     // Note: task/thread detach not supported on FreeRTOS API, so we force its deletion instead.
+-    return _z_task_cancel(task);
++    // return _z_task_cancel(task);
++
++    // WORKAROUND:
++    // This function is also called from the lease task.
++    // It then executes z_reopen() of Z_FEATURE_AUTO_RECONNECT.
++    // However, if you call vTaskDelete(), your task will disappear, so the desired function will not be executed.
++    // THIS PATCH IS A TEMPORARY SOLUTION UNTIL AN OFFICIAL SOLUTION IS RELEASED BY THE ZENOH-PICO COMMUNITY.
++
++    TaskHandle_t xHandle = xTaskGetCurrentTaskHandle();
++    if (task->handle != xHandle)
++      return _z_task_cancel(task);
++
++    return _Z_RES_OK;
+ }
+ 
+ z_result_t _z_task_cancel(_z_task_t *task) {
+@@ -184,6 +196,8 @@ z_result_t _z_condvar_signal(_z_condvar_t *cv) { _Z_CHECK_SYS_ERR(pthread_cond_s
+ 
+ z_result_t _z_condvar_signal_all(_z_condvar_t *cv) { _Z_CHECK_SYS_ERR(pthread_cond_broadcast(cv)); }
+ 
++z_result_t _z_condvar_wait(_z_condvar_t *cv, _z_mutex_t *m) { _Z_CHECK_SYS_ERR(pthread_cond_wait(cv, m)); }
++
+ z_result_t _z_condvar_wait_until(_z_condvar_t *cv, _z_mutex_t *m, const z_clock_t *abstime) {
+     int error = pthread_cond_timedwait(cv, m, abstime);
+ 

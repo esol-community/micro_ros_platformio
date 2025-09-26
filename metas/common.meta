@@ -36,6 +36,13 @@
                 "-UCLIENT_PROFILE_STREAM_FRAMING=ON",
                 "-DUCLIENT_PROFILE_CUSTOM_TRANSPORT=ON"
             ]
-        }
+        },
+        "zenohpico": {
+            "cmake-args": [
+                "-DBUILD_TESTS=OFF",
+                "-DBUILD_EXAMPLES=OFF",
+                "-DCMAKE_IGNORE_QUALIFIERS=OFF"
+            ]
+        }        
     }
 }

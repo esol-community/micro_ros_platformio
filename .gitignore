@@ -1,5 +1,6 @@
 platformio_toolchain.cmake
 libmicroros/
+.pio
 
 #################
 ## Eclipse
