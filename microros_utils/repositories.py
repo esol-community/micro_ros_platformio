@@ -54,7 +54,13 @@ class Repository:
                     package_path = os.path.join(os.getcwd(), root)
                     packages.append(Package(package_name, package_path))
                 elif 'colcon.pkg' in files:
-                    package_name = Repository.get_package_name_from_colcon_pkg(os.path.join(root, 'colcon.pkg'))
+                    if(self.name == "zenoh-pico"):
+                      # The colcon.pkg of zenoh-pico is written incorrectly, 
+                      # so as a workaround, do not call get_package_name_from_colcon_pkg().
+                      package_name = "zenoh_pico"
+                    else:
+                      package_name = Repository.get_package_name_from_colcon_pkg(os.path.join(root, 'colcon.pkg'))
+
                     package_path = os.path.join(os.getcwd(), root)
                     packages.append(Package(package_name, package_path))
         return packages
@@ -167,12 +173,14 @@ class Sources:
         'jazzy': [
             Repository("micro-CDR", "https://github.com/eProsima/micro-CDR", "jazzy", "ros2"),
             Repository("Micro-XRCE-DDS-Client", "https://github.com/eProsima/Micro-XRCE-DDS-Client", "jazzy", "ros2"),
+            Repository("zenoh-pico", "https://github.com/eclipse-zenoh/zenoh-pico", "jazzy", "1.4.0"),
             Repository("rcl", "https://github.com/micro-ROS/rcl", "jazzy"),
             Repository("rclc", "https://github.com/ros2/rclc", "jazzy"),
             Repository("micro_ros_utilities", "https://github.com/micro-ROS/micro_ros_utilities", "jazzy"),
             Repository("rcutils", "https://github.com/micro-ROS/rcutils", "jazzy"),
             Repository("micro_ros_msgs", "https://github.com/micro-ROS/micro_ros_msgs", "jazzy"),
             Repository("rmw-microxrcedds", "https://github.com/micro-ROS/rmw-microxrcedds", "jazzy"),
+            Repository("rmw_zenoh_pico", "https://github.com/esol-community/rmw_zenoh_pico.git", "jazzy", "1.4.0"),
             Repository("rosidl_typesupport", "https://github.com/micro-ROS/rosidl_typesupport", "jazzy"),
             Repository("rosidl_typesupport_microxrcedds", "https://github.com/micro-ROS/rosidl_typesupport_microxrcedds", "jazzy"),
             Repository("rosidl", "https://github.com/ros2/rosidl", "jazzy"),
